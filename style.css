@@ -219,7 +219,6 @@ table .inline{margin-right:6px}
   .mnav{display:block}
   .topin{height:auto;flex-wrap:wrap;padding:10px 16px;gap:10px}
   .navright{margin-left:auto}
-  .navbal{order:-1;margin-left:auto}
   .hero{grid-template-columns:1fr}
   .two-col{grid-template-columns:1fr}
   .quickgrid{grid-template-columns:1fr}
@@ -229,4 +228,47 @@ table .inline{margin-right:6px}
 @media (max-width:560px){
   .hero-cta .btn{width:100%}
   .grid4{grid-template-columns:1fr 1fr}
+}
+
+/* =========================================================
+   CORRECTIONS MISE EN PAGE — solde & dépassements (v2.1)
+   ========================================================= */
+html,body{overflow-x:hidden;width:100%}
+.topin{flex-wrap:wrap;row-gap:8px;column-gap:10px;justify-content:space-between}
+.brand{white-space:nowrap;flex-shrink:0}
+.navright{flex-wrap:wrap;justify-content:flex-end;align-items:center;row-gap:8px;min-width:0;margin-left:auto}
+.chip-user,.chip-admin,.navbal b,.btn.sm{white-space:nowrap}
+.chip-user{max-width:170px;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}
+.navbal b{font-size:13px;padding:6px 10px;display:inline-block;line-height:1.2}
+
+/* cartes & montants : ne JAMAIS déborder la page */
+.card,.hero-bal,.grid3,.grid4,.two-col,.taskgrid,.quickgrid,.stats{min-width:0;max-width:100%}
+.hero-bal{overflow:hidden;gap:12px}
+.bigbalance{word-break:break-word;overflow-wrap:anywhere;line-height:1.15}
+.page{overflow-x:hidden}
+.task{flex-wrap:wrap}
+.task .tbody{min-width:0}
+.task .treward{flex:1 1 auto;min-width:0}
+.treward b{overflow-wrap:anywhere;white-space:normal}
+
+/* tableaux larges : ne sortent plus de l'écran */
+.mini{max-width:100%}
+@media (max-width:640px){
+  .topin{padding:8px 12px;gap:8px}
+  .chip-user{max-width:110px;font-size:12px;padding:6px 9px}
+  .navbal b{font-size:12px}
+  .hero-actions{width:100%}
+  .hero-actions .btn{flex:1 1 auto;justify-content:center}
+  .grid4{grid-template-columns:1fr 1fr}
+  .card{padding:14px}
+  .mini{font-size:12.5px}
+  .mini th,.mini td{padding:7px 5px}
+  .table-scroll{overflow-x:auto}
+}
+@media (max-width:390px){
+  .brand{font-size:16px}
+  .chip-user{max-width:88px;font-size:11.5px}
+  .navright .btn.sm{padding:6px 8px;font-size:12px}
+  .grid4{grid-template-columns:1fr}
+  .bigbalance{font-size:28px}
 }
