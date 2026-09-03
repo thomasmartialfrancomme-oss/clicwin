@@ -87,7 +87,6 @@ ${extraHead || ''}
   <div class="wrap topin">
     <a class="brand" href="/"><span class="logo">₵</span> ${esc(config.siteName)}</a>
     <nav class="mainnav">${navItems}</nav>
-    ${balanceHtml}
     ${right}
   </div>
   <div class="mnav">
