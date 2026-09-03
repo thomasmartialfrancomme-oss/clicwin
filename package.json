@@ -1,0 +1,18 @@
+{
+  "name": "clicwin",
+  "version": "2.0.0",
+  "description": "Plateforme de gains en ligne (publicités à cliquer, vidéos récompensées, offreurs / offerwalls) — bilingue FR/EN. Code prêt à installer.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "seed": "node lib/seed.js",
+    "tasks": "node lib/scheduler.js",
+    "requests": "node lib/requestgen.js"
+  },
+  "engines": {
+    "node": ">=16"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
