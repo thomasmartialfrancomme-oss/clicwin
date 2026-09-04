@@ -186,9 +186,9 @@ function dashboard(req, res, lang, user) {
         <div>
           <h2 class="sect">${esc(t_('dashActions'))}</h2>
           <div class="quickgrid">
-            <a class="card qlink" href="/clicks"><b>🖱️</b>${esc(t_('goClicks'))}</a>
-            <a class="card qlink" href="/videos"><b>▶️</b>${esc(t_('goVideos'))}</a>
+            <a class="card qlink" href="/faucet"><b>💧</b>${esc(t_('goFaucet'))}</a>
             <a class="card qlink" href="/offers"><b>🎯</b>${esc(t_('goOffers'))}</a>
+            <a class="card qlink" href="/withdraw"><b>💸</b>${esc(t_('withdraw'))}</a>
             <a class="card qlink" href="/referrals"><b>👥</b>${esc(t_('refTitle'))}</a>
           </div>
         </div>
@@ -225,99 +225,81 @@ function shortDate(iso, lang) {
 function earnTabs(lang, active) {
   const t_ = (k, v) => t(lang, k, v);
   const items = [
-    ['clicks', '/clicks', t_('clicks')],
-    ['videos', '/videos', t_('videos')],
+    ['faucet', '/faucet', t_('faucet')],
     ['offers', '/offers', t_('offers')]
   ];
   return `<div class="tabs">${items.map(([id, href, label]) => `<a href="${href}" class="${active === id ? 'on' : ''}">${esc(label)}</a>`).join('')}</div>`;
 }
 
-// --- Clics ---
-app.get('/clicks', (req, res) => {
-  const lang = currentLang(req); const user = userOf(req);
+// --- Robinet : remplace les anciennes pages « Clics » et « Vidéos » ---
+// (ces récompenses internes sans vraie publicité coûtaient de l'argent sans rien rapporter)
+app.get(['/clicks', '/videos'], (req, res) => {
+  const user = userOf(req);
+  if (!user) return redirect(res, '/login');
+  redirect(res, '/faucet');
+});
+
+app.get('/faucet', (req, res) => {
+  const lang = currentLang(req);
+  const user = userOf(req);
   if (!user) return redirect(res, '/login');
   const t_ = (k, v) => t(lang, k, v);
-  const view = store.userClicksView(user, lang);
-  const cards = view.length ? view.map(ct => clickCard(lang, ct, t_)).join('') : `<p class="muted">${esc(t_('noTasks'))}</p>`;
-  const maxToday = Math.max(0, ...view.map(v => v.status === 'active' ? 30 : 0));
+  const f = config.faucet || {};
+  const state = store.faucetState(user.id) || { enabled: false, claimed: 0, cap: 0, wait: 0 };
+  const secs = f.intervalSec || 120;
+  const cap = f.dailyCap || 100;
+  const big = config.balanceExtra || '';
   render(req, res, {
-    lang, user, active: 'clicks', title: t_('clicks'),
-    bodyScripts: '<script src="/js/earn.js"></script>',
+    lang, user, active: 'faucet', title: t_('faucetTitle'),
+    bodyScripts: '<script src="/js/faucet.js"></script>',
     content: `
-      <h1>${esc(t_('earnTitle'))}</h1>
-      ${earnTabs(lang, 'clicks')}
+      <h1>${esc(t_('faucetTitle'))}</h1>
+      ${earnTabs(lang, 'faucet')}
       ${balanceCard(lang, user)}
-      <p class="muted">${esc(t_('adDemoSub'))}</p>
-      <section class="taskgrid">${cards}</section>
-      <div class="modal hidden" id="clickModal" role="dialog" aria-modal="true">
-        <div class="modal-back" data-close></div>
-        <div class="modal-card">
-          <div class="modal-head"><h3>${esc(t_('adDemo'))}</h3><button class="x" data-close aria-label="close">×</button></div>
-          <div class="adbox" id="adBox">
-            <div class="adbrand" id="adBrand">SPONSOR</div>
-            <div class="adtxt" id="adTxt">—</div>
-            <div class="adbar"><i id="adBar"></i></div>
-            <div class="adcount" id="adCount">${esc(t_('waitSec', { s: '…' }))}</div>
-          </div>
-          <p class="muted small" id="adStatus"></p>
+      ${big}
+      <section class="two-col">
+        <div class="card pad faucet-main">
+          <div class="droplet">💧</div>
+          <p>${esc(t_('faucetSub'))}</p>
+          <div class="muted small faucet-meta">${esc(t_('faucetLimit', { s: secs, cap }))}</div>
+          <div class="faucet-timer" id="faucetTimer">--:--</div>
+          <button id="faucetBtn" class="btn primary big" disabled
+            data-ready="${escAttr(t_('faucetReady'))}"
+            data-claiming="${escAttr(t_('faucetClaiming'))}"
+            data-waitlabel="${escAttr(t_('faucetWaitLabel'))}"
+            data-t-earned="${escAttr(t_('faucetGot'))}"
+            data-msg-cap="${escAttr(t_('faucetCapMsg'))}"
+            data-msg-err="${escAttr(t_('faucetErr'))}"
+            data-t-next="${escAttr(t_('faucetNext'))}"
+            data-interval="${secs}">${esc(t_('faucetClaim'))}</button>
+          <p id="faucetMsg" class="muted faucet-msg"></p>
+          <p class="muted small">${esc(t_('faucetToday'))} : <b id="faucetCount">${esc(String(state.claimed))}/${esc(String(cap))}</b></p>
         </div>
-      </div>`
+        <div class="card pad">
+          <h3>${esc(t_('faucetHow'))}</h3>
+          <ol class="howlist small">
+            <li>${esc(t_('faucetHow1'))}</li>
+            <li>${esc(t_('faucetHow2'))}</li>
+            <li>${esc(t_('faucetHow3'))}</li>
+          </ol>
+          <div class="info small">💡 ${esc(t_('faucetNote'))}</div>
+        </div>
+      </section>`
   });
 });
 
-function clickCard(lang, ct, t_) {
-  const soon = ct.status === 'soon';
-  const full = !soon && ct.usedToday >= ct.cap;
-  return `<article class="card task ${soon ? 'soon' : ''}" data-kind="click" data-id="${ct.id}" data-cd="${ct.cd}" data-used="${ct.usedToday}" data-cap="${ct.cap}">
-    <div class="ticon" style="background:${ct.color}">🖱️</div>
-    <div class="tbody">
-      <div class="trow"><b>${esc(ct.title)}</b>${soon ? `<span class="chip soon">${esc(t_('coming'))}</span>` : `<span class="chip green">${esc(t_('active'))}</span>`}</div>
-      <div class="muted small">${esc(t_('taskTypeClick'))} · <b class="usedcount">${ct.usedToday}/${ct.cap}</b> ${esc(t_('clicksToday'))}</div>
-    </div>
-    <div class="treward"><b>+${esc(money(ct.reward, lang))}</b><span>${esc(t_('rewardPer'))}</span>
-      ${soon ? '' : full ? `<button class="btn primary small" disabled>✓ ${esc(t_('maxClicks'))}</button>` : `<button class="btn primary small" data-start>${esc(t_('actionClick'))}</button>`}
-    </div>
-  </article>`;
-}
-
-// --- Vidéos ---
-app.get('/videos', (req, res) => {
-  const lang = currentLang(req); const user = userOf(req);
-  if (!user) return redirect(res, '/login');
-  const t_ = (k, v) => t(lang, k, v);
-  const vids = store.listVideoTasks().map(v => {
-    v.usedToday = store.usedTaskToday(user.id, 'video', v.id);
-    v.cap = v.dailyCap || config.videoCapPerTask;
-    return v;
-  }).map(v => videoCard(lang, v, t_)).join('') || `<p class="muted">${esc(t_('noVideo'))}</p>`;
-  render(req, res, {
-    lang, user, active: 'clicks', title: t_('videos'),
-    bodyScripts: '<script src="/js/earn.js"></script>',
-    content: `
-      <h1>${esc(t_('videoTitle'))}</h1>
-      ${earnTabs(lang, 'videos')}
-      ${balanceCard(lang, user)}
-      <p class="muted">${esc(t_('videoSub'))}</p>
-      <section class="taskgrid vidgrid">${vids}</section>`
-  });
+// API robinet : état courant (minuteur) + réclamation
+app.get('/api/faucet/state', (req, res) => {
+  const u = userOf(req);
+  if (!u) return res.json({ ok: false, code: 'auth' });
+  res.json({ ok: true, state: store.faucetState(u.id) });
 });
-function videoCard(lang, v, t_) {
-  const soon = v.status === 'soon';
-  const full = !soon && v.usedToday >= v.cap;
-  const mins = Math.floor((v.duration || 10) / 60), secs = (v.duration || 10) % 60;
-  return `<article class="card task vcard ${soon ? 'soon' : ''}" data-kind="video" data-id="${v.id}" data-hold="${v.duration || 10}" data-src="${escAttr(v.src)}">
-    <video class="vplayer" preload="metadata" playsinline muted ${v.status === 'soon' ? 'disabled' : ''}></video>
-    <div class="tbody">
-      <div class="trow"><b>${esc(v.title[lang] || v.titleDefault)}</b>${soon ? `<span class="chip soon">${esc(t_('coming'))}</span>` : ''}</div>
-      <div class="muted small">${esc(t_('videoMeta'))} · ⏱ ${mins ? mins + ' min ' : ''}${secs} ${esc(t_('seconds'))} · <b class="usedcount">${v.usedToday}/${v.cap}</b> ${esc(t_('todayShort'))}</div>
-    </div>
-    <div class="treward"><b>+${esc(money(v.reward, lang))}</b><span>${esc(t_('videoEarn'))}</span>
-      <button class="btn primary small" data-watch ${soon || full ? 'disabled' : ''}>${soon ? esc(t_('coming')) : full ? '✓ ' + esc(t_('maxClicks')) : '▶ ' + esc(t_('actionWatch'))}</button>
-    </div>
-    <div class="vprogress hidden"><i></i></div>
-    <div class="vmsg hidden"></div>
-  </article>`;
-}
+
+app.post('/api/faucet/claim', (req, res) => {
+  const u = userOf(req);
+  if (!u) return res.json({ ok: false, code: 'auth' });
+  res.json(store.faucetClaim(u.id));
+});
 
 // --- Offres ---
 app.get('/offers', (req, res) => {
@@ -653,6 +635,7 @@ const clickStarts = new Map(); // userId|taskId => timestamp (ms)
 app.post('/api/click/start', (req, res) => {
   const u = userOf(req);
   if (!u) return res.json({ ok: false, code: 'auth' });
+  if (config.legacyTasks === false) return res.json({ ok: false, code: 'off' });
   const task = store.getTask(String(req.body.taskId || ''));
   if (!task || task.kind !== 'click' || task.status === 'soon') return res.json({ ok: false, code: 'invalid' });
   const c1 = store.inCooldown('click_' + u.id, config.clickCooldownSec);
@@ -701,6 +684,7 @@ const videoStarts = new Map();
 app.post('/api/video/start', (req, res) => {
   const u = userOf(req);
   if (!u) return res.json({ ok: false, code: 'auth' });
+  if (config.legacyTasks === false) return res.json({ ok: false, code: 'off' });
   const task = store.getTask(String(req.body.taskId || ''));
   if (!task || task.kind !== 'video' || task.status === 'soon') return res.json({ ok: false, code: 'invalid' });
   videoStarts.set(u.id + '|' + task.id, Date.now());
