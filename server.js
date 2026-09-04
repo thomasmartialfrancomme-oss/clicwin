@@ -320,6 +320,32 @@ app.get('/offers', (req, res) => {
   const lang = currentLang(req); const user = userOf(req);
   if (!user) return redirect(res, '/login');
   const t_ = (k, v) => t(lang, k, v);
+
+  // -------- Mode LIVE : mur d'offres BitLabs réel (si token présent) --------
+  const wallLive = config.offerwallMode === 'live' && !!config.bitlabsToken;
+  if (wallLive) {
+    const wallSrc = config.bitlabsWallUrl + '?token=' + encodeURIComponent(config.bitlabsToken) +
+      '&uid=' + encodeURIComponent(user.id);
+    render(req, res, {
+      lang, user, active: 'clicks', title: t_('offers'),
+      content: `
+      <h1>${esc(t_('offersTitle'))}</h1>
+      ${earnTabs(lang, 'offers')}
+      ${balanceCard(lang, user)}
+      <div class="card pad">
+        <h2 class="sect">${esc(t_('offersLiveTitle'))}</h2>
+        <p>${esc(t_('offersPick'))}</p>
+        <p class="muted small">${esc(t_('offersLiveSub'))}</p>
+        <div class="wallframe">
+          <iframe src="${escAttr(wallSrc)}" title="${escAttr(t_('offersLiveTitle'))}"
+            style="width:100%;height:680px;border:0;border-radius:12px;background:#fff"
+            loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+        </div>
+      </div>`
+    });
+    return;
+  }
+
   const cards = store.listOfferTasks().map(o => {
     return `<article class="card task soon" data-kind="offer">
       <div class="ticon" style="background:${o.color}">🎯</div>
@@ -715,6 +741,48 @@ app.post('/api/postback', (req, res) => {
   store.credit(user, amount, 'offer', 'offer:' + String(req.body.offer || req.body.trans_id || 'postback'));
   store.afterReferralActivity(user, amount);
   res.json({ ok: true, balance: user.balance });
+});
+
+// ============================================================
+//  API — Postback BitLabs (crédit auto quand une offre est faite)
+//  À configurer dans BitLabs → Apps → ton app → Integration :
+//  URL : https://TON-DOMAINE/api/postback/bitlabs
+//  ?uid=[%UID%]&val=[%VAL%]&tx=[%TX%]&type=[%TYPE%]
+// ============================================================
+app.get('/api/postback/bitlabs', (req, res) => {
+  const uid = String(req.query.uid || req.query.UID || '');
+  const rawVal = String(req.query.val || req.query.VAL || '');
+  const tx = String(req.query.tx || req.query.TX || '');
+  const type = String(req.query.type || req.query.TYPE || '').toUpperCase();
+  const amount = parseFloat(rawVal);
+
+  if (!config.bitlabsToken) return res.status(403).send('disabled');
+  if (!uid || isNaN(amount) || amount <= 0) return res.status(400).send('bad request');
+
+  // Vérif du hash signé si un App Secret est renseigné
+  if (config.bitlabsSecret && req.query.hash) {
+    const crypto = require('crypto');
+    const host = req.protocol + '://' + req.get('host');
+    const full = host + req.originalUrl.replace(/([?&])hash=[^&]*/, '$1'); // hash exclu du calcul
+    const h = crypto.createHmac('sha1', config.bitlabsSecret).update(full).digest('hex');
+    if (h !== String(req.query.hash).toLowerCase()) return res.status(403).send('bad hash');
+  }
+
+  // TYPE : on ne crédite que les conversions COMPLETE (pas les SCREENOUT sauf règle interne)
+  if (type && type !== 'COMPLETE') return res.send('ok'); // screenout = pas de crédit
+
+  const user = store.findUserById(uid);
+  if (!user) return res.send('ok'); // utilisateur inconnu → 200 pour éviter les retries
+  if (!user.active) return res.send('ok');
+
+  // Anti-doublon : même transaction déjà créditée ?
+  const txs = store.allTx();
+  const dup = txs.some(x => x.note === 'bitlabs:' + tx);
+  if (dup) return res.send('ok');
+
+  store.credit(user, amount, 'offer', 'bitlabs:' + tx);
+  store.afterReferralActivity(user, amount);
+  res.send('ok');
 });
 
 // ============================================================
