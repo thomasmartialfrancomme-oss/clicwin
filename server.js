@@ -824,16 +824,6 @@ function handleAdGemV3(req, res) {
   const data = (body.data && typeof body.data === 'object') ? body.data : {};
   const key = config.adgemPostbackKey;
 
-  // Signature = HMAC-SHA256 du corps brut (raw body) signé avec la Postback Key
-  const receivedSig = String(req.headers['signature'] || '');
-  if (key && receivedSig) {
-    const raw = req.rawBody ? req.rawBody.toString('utf8') : JSON.stringify(body);
-    const expected = crypto.createHmac('sha256', key).update(raw).digest('hex');
-    if (expected.toLowerCase() !== receivedSig.toLowerCase()) {
-      return res.status(401).send('invalid signature');
-    }
-  }
-
   const playerId = String(data.player_id || body.player_id || data.user_id || body.user_id || '');
   // anti-doublon : conversion_id identifie la conversion (les retries ont un request_id neuf)
   const convId = String(data.conversion_id || body.conversion_id || body.request_id || data.request_id || '');
@@ -842,12 +832,26 @@ function handleAdGemV3(req, res) {
   if (isNaN(amount) || amount < 0) amount = isNaN(payout) ? 0 : payout; // fallback sur le payout
   const divisor = config.adgemAmountDivisor || 1;
 
-  if (!playerId) return res.status(200).send('OK'); // pas de user → ignoré, pas de retry
+  // Sans joueur (test AdGem, événements d'install, inconnu) → rien à créditer :
+  // on répond OK sans retry. Aucune signature n'est nécessaire puisqu'aucun crédit n'aura lieu.
+  if (!playerId) return res.status(200).send('OK');
   const user = store.findUserById(playerId);
   if (!user || !user.active) return res.status(200).send('OK');
 
   const realAmount = Math.round(amount / divisor * 100) / 100;
   if (realAmount <= 0) return res.status(200).send('OK');
+
+  // Un crédit réel exige une signature valide = HMAC-SHA256 du corps brut (raw body),
+  // clé = Postback Key, transmise dans l'en-tête « Signature ».
+  if (key) {
+    const receivedSig = String(req.headers['signature'] || '');
+    if (!receivedSig) return res.status(401).send('missing signature');
+    const raw = req.rawBody ? req.rawBody.toString('utf8') : JSON.stringify(body);
+    const expected = crypto.createHmac('sha256', key).update(raw).digest('hex');
+    if (expected.toLowerCase() !== receivedSig.toLowerCase()) {
+      return res.status(401).send('invalid signature');
+    }
+  }
 
   const tag = 'adgem:' + (convId || (playerId + ':' + amount));
   if (store.allTx().some(x => x.note === tag)) return res.status(200).send('OK'); // déjà crédité
@@ -870,43 +874,37 @@ function handleAdGemV2(req, res) {
   }
   const divisor = config.adgemAmountDivisor || 1;
 
-  // Vérification du hash si une Postback Key a été renseignée.
-  // AdGem calcule le verifier sur l'URL exacte qu'il envoie, MAIS certains
-  // récepteurs trient les paramètres. On accepte donc les 2 formes :
-  //  1) l'URL exactement reçue (ordre d'AdGem)
-  //  2) l'URL avec paramètres triés par ordre alphabétique (recommandation AdGem)
-  // → les deux exigent la clé secrète, donc la sécurité reste totale.
-  if (config.adgemPostbackKey && verifier) {
-    const host = req.protocol + '://' + req.get('host');
-    const path = req.path;
-    const urlNoVerifier = host + path + '?' + Object.keys(req.query)
-      .filter(k => k !== 'verifier')
-      .map(k => k + '=' + String(req.query[k]))
-      .join('&');
-
-    // 1) forme reçue : on garde l'ordre d'arrivée (hors verifier), même si un
-    //    paramètre se répète, on reconstruit depuis req.originalUrl
-    const rawHashless = (host + req.originalUrl).split('&verifier=')[0].split('?verifier=')[0];
-    // 2) forme triée alphabétiquement (RFC 3986)
-    const sorted = new URLSearchParams();
-    Object.keys(req.query).filter(k => k !== 'verifier').sort()
-      .forEach(k => sorted.append(k, String(req.query[k])));
-    const sortedUrl = host + path + '?' + sorted.toString();
-
-    const tries = [rawHashless, urlNoVerifier, sortedUrl];
-    let valid = tries.some(u => {
-      const h = crypto.createHmac('sha256', config.adgemPostbackKey).update(u).digest('hex');
-      return h.toLowerCase() === String(verifier).toLowerCase();
-    });
-    if (!valid) return res.status(422).send('invalid verifier');
-  }
-
-  if (!playerId) return res.status(200).send('OK'); // pas de user → on ignore sans retry
+  // Sans joueur (test AdGem, événements sans user) → rien à créditer : OK sans retry.
+  // La signature n'est contrôlée QUE s'il y a un vrai crédit à faire.
+  if (!playerId) return res.status(200).send('OK');
   const user = store.findUserById(playerId);
   if (!user || !user.active) return res.status(200).send('OK');
 
   const realAmount = Math.round(amount / divisor * 100) / 100;
   if (realAmount <= 0) return res.status(200).send('OK');
+
+  // Un crédit réel exige un verifier valide quand une Postback Key est configurée.
+  // AdGem calcule le verifier sur l'URL exacte qu'il envoie, MAIS certains récepteurs
+  // trient les paramètres. On accepte donc les formes :
+  //  1) l'URL exactement reçue (ordre d'AdGem)
+  //  2) l'URL avec paramètres triés par ordre alphabétique (recommandation AdGem)
+  // → les deux exigent la clé secrète, donc la sécurité reste totale.
+  if (config.adgemPostbackKey) {
+    if (!verifier) return res.status(422).send('missing verifier');
+    const host = req.protocol + '://' + req.get('host');
+    const path = req.path;
+    const rawHashless = (host + req.originalUrl).split('&verifier=')[0].split('?verifier=')[0];
+    const sorted = new URLSearchParams();
+    Object.keys(req.query).filter(k => k !== 'verifier').sort()
+      .forEach(k => sorted.append(k, String(req.query[k])));
+    const sortedUrl = host + path + '?' + sorted.toString();
+    const tries = [rawHashless, sortedUrl];
+    const valid = tries.some(u => {
+      const h = crypto.createHmac('sha256', config.adgemPostbackKey).update(u).digest('hex');
+      return h.toLowerCase() === String(verifier).toLowerCase();
+    });
+    if (!valid) return res.status(422).send('invalid verifier');
+  }
 
   // Anti-doublon : un même request_id ne crédite qu'une fois
   const tag = 'adgem:' + (requestId || (playerId + ':' + amount + ':' + payout));
