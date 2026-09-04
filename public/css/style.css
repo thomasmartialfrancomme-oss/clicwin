@@ -300,3 +300,17 @@ table .inline{margin-right:6px}
   .grid4{grid-template-columns:1fr}
   .bigbalance{font-size:30px}
 }
+
+/* ===== En attendant (faucet) ===== */
+.faucet-wait{margin-top:20px}
+.faucet-wait h3{margin-top:0}
+.waitgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:12px}
+.waitcard{display:flex;align-items:center;gap:14px;text-decoration:none!important;color:var(--ink);padding:18px;border-radius:16px}
+.waitcard b:first-child{font-size:30px;flex:0 0 auto}
+.waitcard .wlabel{display:flex;flex-direction:column;gap:2px;min-width:0}
+.waitcard .wlabel b{font-size:15px;color:var(--ink)}
+.waitcard .wlabel small{color:var(--muted);font-size:12.5px;line-height:1.35}
+.waitcard:hover{transform:translateY(-2px);border-color:#a7f3d0;box-shadow:0 16px 34px -18px rgba(16,185,129,.5)}
+.ad-zone{margin-top:18px;display:flex;justify-content:center;align-items:center;min-height:60px}
+.ad-zone iframe,.ad-zone ins,.ad-zone script{max-width:100%}
+@media (max-width:560px){.waitgrid{grid-template-columns:1fr}}
