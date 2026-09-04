@@ -47,7 +47,12 @@ const config = {
   rewardScale: 1,           // coefficient des récompenses (1 = normal)
 
   // Partenariats (offreurs). ON = le site intègre les walls quand tu as tes clés.
-  offerwallMode: 'demo',    // 'demo' | 'live' (voir README — LIVE + clés requises)
+  offerwallMode: 'live',    // 'demo' | 'live' (voir README — LIVE + clés requises)
+
+  // BitLabs — mur d'offres web (https://web.bitlabs.ai/?token=...&uid=...)
+  bitlabsToken: '26fef21-41a6-4699-87c1-f177e0498d51',  // ← App/API Token BitLabs
+  bitlabsSecret: '',         // ← App Secret (optionnel, pour vérifier les postbacks signés)
+  bitlabsWallUrl: 'https://web.bitlabs.ai/',
   refPercent: 10,           // % reversé au parrain sur CHAQUE gain de ses filleuls
   refReward: 0.2,           // bonus (en €) offert au parrain à l'activation d'un filleul
   refActiveClicks: 5,       // nb de clics du filleul pour devenir « actif »
