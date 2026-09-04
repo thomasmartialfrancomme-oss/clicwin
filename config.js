@@ -53,6 +53,12 @@ const config = {
   bitlabsToken: '26fef21-41a6-4699-87c1-f177e0498d51',  // ← App/API Token BitLabs
   bitlabsSecret: '',         // ← App Secret (optionnel, pour vérifier les postbacks signés)
   bitlabsWallUrl: 'https://web.bitlabs.ai/',
+
+  // AdGem — offerwall web
+  adgemMode: 'on',           // 'on' | 'off' (on dès que la propriété est créée)
+  adgemAppId: 'hafda01h7378ale019h6ejb7',   // ← App/Property ID AdGem (donné par leur dashboard)
+  adgemPostbackKey: '',      // ← "Postback Key" (secret) : à me donner pour la vérif des notifications
+  adgemAmountDivisor: 1,     // si AdGem envoie des "points" et pas des €, mettre le diviseur
   refPercent: 10,           // % reversé au parrain sur CHAQUE gain de ses filleuls
   refReward: 0.2,           // bonus (en €) offert au parrain à l'activation d'un filleul
   refActiveClicks: 5,       // nb de clics du filleul pour devenir « actif »
