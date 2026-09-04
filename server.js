@@ -816,16 +816,35 @@ function handleAdGemPostback(req, res) {
   }
   const divisor = config.adgemAmountDivisor || 1;
 
-  // Vérification du hash si une Postback Key a été renseignée
+  // Vérification du hash si une Postback Key a été renseignée.
+  // AdGem calcule le verifier sur l'URL exacte qu'il envoie, MAIS certains
+  // récepteurs trient les paramètres. On accepte donc les 2 formes :
+  //  1) l'URL exactement reçue (ordre d'AdGem)
+  //  2) l'URL avec paramètres triés par ordre alphabétique (recommandation AdGem)
+  // → les deux exigent la clé secrète, donc la sécurité reste totale.
   if (config.adgemPostbackKey && verifier) {
     const host = req.protocol + '://' + req.get('host');
-    const full = host + req.originalUrl;
-    // on retire le paramètre verifier pour recalculer comme AdGem
-    const hashless = full.split('&verifier=')[0].split('?verifier=')[0];
-    const h = crypto.createHmac('sha256', config.adgemPostbackKey).update(hashless).digest('hex');
-    if (h.toLowerCase() !== String(verifier).toLowerCase()) {
-      return res.status(422).send('invalid verifier');
-    }
+    const path = req.path;
+    const urlNoVerifier = host + path + '?' + Object.keys(req.query)
+      .filter(k => k !== 'verifier')
+      .map(k => k + '=' + String(req.query[k]))
+      .join('&');
+
+    // 1) forme reçue : on garde l'ordre d'arrivée (hors verifier), même si un
+    //    paramètre se répète, on reconstruit depuis req.originalUrl
+    const rawHashless = (host + req.originalUrl).split('&verifier=')[0].split('?verifier=')[0];
+    // 2) forme triée alphabétiquement (RFC 3986)
+    const sorted = new URLSearchParams();
+    Object.keys(req.query).filter(k => k !== 'verifier').sort()
+      .forEach(k => sorted.append(k, String(req.query[k])));
+    const sortedUrl = host + path + '?' + sorted.toString();
+
+    const tries = [rawHashless, urlNoVerifier, sortedUrl];
+    let valid = tries.some(u => {
+      const h = crypto.createHmac('sha256', config.adgemPostbackKey).update(u).digest('hex');
+      return h.toLowerCase() === String(verifier).toLowerCase();
+    });
+    if (!valid) return res.status(422).send('invalid verifier');
   }
 
   if (!playerId) return res.status(200).send('OK'); // pas de user → on ignore sans retry
