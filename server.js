@@ -333,6 +333,15 @@ app.get('/faucet', (req, res) => {
           </ol>
           <div class="info small">💡 ${esc(t_('faucetNote'))}</div>
         </div>
+      </section>
+      <section class="card pad faucet-wait">
+        <h3>⏳ ${esc(t_('faucetWaitTitle'))}</h3>
+        <p class="muted small">${esc(t_('faucetWaitSub'))}</p>
+        <div class="waitgrid">
+          <a class="card waitcard" href="/offers"><b>🎯</b><span class="wlabel"><b>${esc(t_('faucetWaitOffers'))}</b><small>${esc(t_('faucetWaitOffersD'))}</small></span></a>
+          <a class="card waitcard" href="/referrals"><b>👥</b><span class="wlabel"><b>${esc(t_('faucetWaitRef'))}</b><small>${esc(t_('faucetWaitRefD', { p: config.refPercent }))}</small></span></a>
+        </div>
+        ${(config.ads && config.ads.faucetWait) ? `<div class="ad-zone">${config.ads.faucetWait}</div>` : ''}
       </section>`
   });
 });
