@@ -786,6 +786,65 @@ app.get('/api/postback/bitlabs', (req, res) => {
 });
 
 // ============================================================
+//  API — Postback AdGem (crédit auto quand une offre est faite)
+//  AdGem envoie (GET ou POST) : player_id, amount, payout, ...,
+//  request_id (uuid unique) + verifier (HMAC-SHA256 si clé activée)
+//  Dans AdGem → Properties & Apps → Edit → Postback Options →
+//  activer "Server Postback" (GET) avec cette URL :
+//   https://TON-DOMAINE/api/postback/adgem
+// ============================================================
+const crypto = require('crypto');
+
+function getParam(req, key) {
+  const v = req.query[key] != null ? req.query[key]
+        : (req.body && req.body[key] != null ? req.body[key] : null);
+  return v == null ? '' : String(v);
+}
+
+function handleAdGemPostback(req, res) {
+  const requestId = getParam(req, 'request_id');
+  const verifier = getParam(req, 'verifier');
+  const playerId = getParam(req, 'player_id') || getParam(req, 'playerid') || getParam(req, 'user_id');
+  let amount = parseFloat(getParam(req, 'amount'));
+  const payout = parseFloat(getParam(req, 'payout'));
+  if (isNaN(amount) || amount < 0) {
+    // si pas d'amount (install event), on utilise le payout converti
+    amount = isNaN(payout) ? 0 : payout;
+  }
+  const divisor = config.adgemAmountDivisor || 1;
+
+  // Vérification du hash si une Postback Key a été renseignée
+  if (config.adgemPostbackKey && verifier) {
+    const host = req.protocol + '://' + req.get('host');
+    const full = host + req.originalUrl;
+    // on retire le paramètre verifier pour recalculer comme AdGem
+    const hashless = full.split('&verifier=')[0].split('?verifier=')[0];
+    const h = crypto.createHmac('sha256', config.adgemPostbackKey).update(hashless).digest('hex');
+    if (h.toLowerCase() !== String(verifier).toLowerCase()) {
+      return res.status(422).send('invalid verifier');
+    }
+  }
+
+  if (!playerId) return res.status(200).send('OK'); // pas de user → on ignore sans retry
+  const user = store.findUserById(playerId);
+  if (!user || !user.active) return res.status(200).send('OK');
+
+  const realAmount = Math.round(amount / divisor * 100) / 100;
+  if (realAmount <= 0) return res.status(200).send('OK');
+
+  // Anti-doublon : un même request_id ne crédite qu'une fois
+  const tag = 'adgem:' + (requestId || (playerId + ':' + amount + ':' + payout));
+  if (store.allTx().some(x => x.note === tag)) return res.status(200).send('OK');
+
+  store.credit(user, realAmount, 'offer', tag);
+  store.afterReferralActivity(user, realAmount);
+  res.status(200).send('OK');
+}
+
+app.get('/api/postback/adgem', handleAdGemPostback);
+app.post('/api/postback/adgem', handleAdGemPostback);
+
+// ============================================================
 //  API — Retrait
 // ============================================================
 app.post('/api/withdraw', (req, res) => {
