@@ -13,6 +13,9 @@ const { t } = require('./lib/i18n');
 const { esc, escAttr, money, readCookie, layout, balanceCard } = require('./lib/html.js');
 
 const app = express();
+// Derrière le proxy HTTPS de Render/Cloudflare : garder le vrai schéma (https)
+// et la vraie IP du visiteur (anti-triche) malgré le proxy.
+app.set('trust proxy', 1);
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(express.static(config.publicDir));
