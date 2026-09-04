@@ -85,9 +85,9 @@ app.get('/', (req, res) => {
           <a class="btn big" href="#how">${esc(t_('ctaTour'))}</a>
         </div>
         <div class="stats">
-          <div><b>${esc(String(s.members))}</b><span>${esc(t_('statsMembers'))}</span></div>
-          <div><b>${esc(String(s.clicks))}</b><span>${esc(t_('statsClicks'))}</span></div>
-          <div><b>${esc(money(s.paid, lang))}</b><span>${esc(t_('statsPaid'))}</span></div>
+          <div class="statbox"><b>${esc(String(s.members))}</b><span>${esc(t_('statsMembers'))}</span></div>
+          <div class="statbox"><b>${esc(String(s.clicks))}</b><span>${esc(t_('statsClicks'))}</span></div>
+          <div class="statbox"><b>${esc(money(s.paid, lang))}</b><span>${esc(t_('statsPaid'))}</span></div>
         </div>
       </div>
       <div class="hero-art">${artSvg()}</div>
@@ -125,18 +125,67 @@ app.get('/', (req, res) => {
 });
 
 function artSvg() {
-  return `<svg viewBox="0 0 320 220" role="img" aria-hidden="true">
-  <rect x="20" y="30" width="280" height="150" rx="18" fill="#0f172a"/>
-  <rect x="40" y="50" width="120" height="16" rx="8" fill="#334155"/>
-  <rect x="40" y="78" width="240" height="9" rx="4" fill="#1e293b"/>
-  <rect x="40" y="96" width="200" height="9" rx="4" fill="#1e293b"/>
-  <rect x="40" y="114" width="230" height="9" rx="4" fill="#1e293b"/>
-  <g>
-    <circle cx="60" cy="160" r="26" fill="none" stroke="#10b981" stroke-width="8" stroke-dasharray="163 300" transform="rotate(-90 60 160)"/>
-    <text x="60" y="166" text-anchor="middle" font-size="15" fill="#10b981" font-weight="bold" font-family="Arial">₵</text>
+  return `<svg viewBox="0 0 400 330" role="img" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="gC" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#10b981"/><stop offset="1" stop-color="#0ea5e9"/>
+    </linearGradient>
+    <linearGradient id="gB" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0f172a"/><stop offset="1" stop-color="#134e4a"/>
+    </linearGradient>
+    <linearGradient id="gG" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4f46e5"/><stop offset="1" stop-color="#06b6d4"/>
+    </linearGradient>
+  </defs>
+
+  <!-- halo -->
+  <circle cx="200" cy="160" r="150" fill="url(#gC)" opacity="0.08"/>
+  <circle cx="200" cy="160" r="120" fill="url(#gC)" opacity="0.06"/>
+
+  <!-- carte principale -->
+  <rect x="50" y="90" width="300" height="170" rx="24" fill="url(#gB)" stroke="rgba(255,255,255,.18)"/>
+  <circle cx="316" cy="112" r="34" fill="url(#gC)" opacity=".9"/>
+  <text x="316" y="123" text-anchor="middle" font-size="34" fill="#fff" font-weight="bold" font-family="Arial">₵</text>
+
+  <!-- barre titre carte -->
+  <rect x="78" y="118" width="90" height="10" rx="5" fill="#ffffff" opacity=".32"/>
+  <rect x="78" y="140" width="180" height="16" rx="8" fill="#ffffff" opacity=".9"/>
+  <text x="78" y="156" font-size="15" fill="#0f172a" font-weight="bold" font-family="Arial">234,18 €</text>
+
+  <!-- lignes fantome -->
+  <rect x="78" y="176" width="150" height="8" rx="4" fill="#ffffff" opacity=".25"/>
+  <rect x="78" y="192" width="120" height="8" rx="4" fill="#ffffff" opacity=".25"/>
+
+  <!-- bouton CTA carte -->
+  <rect x="78" y="212" width="120" height="30" rx="15" fill="url(#gC)"/>
+  <text x="138" y="232" text-anchor="middle" font-size="13" fill="#fff" font-weight="bold" font-family="Arial">GAGNER +</text>
+
+  <!-- flèche hausse -->
+  <path d="M278 232 L310 196 L322 196" fill="none" stroke="#34d399" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M316 196 h6 v6" fill="none" stroke="#34d399" stroke-width="4" stroke-linecap="round"/>
+
+  <!-- graphique en barres derrière -->
+  <g opacity=".85">
+    <rect x="120" y="60" width="26" height="46" rx="8" fill="#a7f3d0"/>
+    <rect x="156" y="38" width="26" height="68" rx="8" fill="#6ee7b7"/>
+    <rect x="192" y="52" width="26" height="54" rx="8" fill="#34d399"/>
+    <rect x="228" y="22" width="26" height="84" rx="8" fill="url(#gC)"/>
   </g>
-  <rect x="150" y="145" width="120" height="32" rx="16" fill="#10b981"/>
-  <text x="210" y="166" text-anchor="middle" font-size="13" fill="#fff" font-weight="bold" font-family="Arial">CLICK → ₵</text>
+
+  <!-- pièce volante -->
+  <g>
+    <circle cx="86" cy="46" r="24" fill="#fbbf24" stroke="#f59e0b" stroke-width="3"/>
+    <circle cx="86" cy="46" r="15" fill="none" stroke="#f59e0b" stroke-width="2.5" opacity=".7"/>
+    <text x="86" y="53" text-anchor="middle" font-size="18" fill="#92400e" font-weight="bold" font-family="Arial">€</text>
+  </g>
+  <g>
+    <circle cx="322" cy="66" r="15" fill="#c084fc" stroke="#a855f7" stroke-width="3"/>
+    <text x="322" y="72" text-anchor="middle" font-size="13" fill="#fff" font-weight="bold" font-family="Arial">✓</text>
+  </g>
+
+  <!-- goutte robinet -->
+  <circle cx="238" cy="280" r="9" fill="url(#gC)" opacity=".95"/>
+  <path d="M238 266 q6 14 0 14 q-6 0 0 -14" fill="url(#gC)" opacity=".5"/>
 </svg>`;
 }
 function stepCard(n, a, b) {
