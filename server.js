@@ -17,7 +17,8 @@ const app = express();
 // et la vraie IP du visiteur (anti-triche) malgré le proxy.
 app.set('trust proxy', 1);
 app.use(express.urlencoded({ extended: true }));
-app.use(express.json());
+// on garde le corps brut (buffer) pour vérifier la signature HMAC des postbacks JSON v3 d'AdGem
+app.use(express.json({ verify: (req, res, buf) => { req.rawBody = buf; } }));
 app.use(express.static(config.publicDir));
 
 // ---------- utilitaires session / langue ----------
@@ -804,7 +805,60 @@ function getParam(req, key) {
   return v == null ? '' : String(v);
 }
 
+// AdGem propose 2 mécanismes de postback :
+//  • v2 (ancien) : GET avec paramètres + verifier = HMAC-SHA256 de l'URL (sans le verifier)
+//  • v3 (recommandé actuellement) : POST avec corps JSON signé, en-tête « Signature »
+//      = HMAC-SHA256 du corps brut (raw body), clé = Postback Key.
+// Cette route accepte les deux.
+
 function handleAdGemPostback(req, res) {
+  const ct = String(req.headers['content-type'] || '');
+  const isJson = ct.includes('application/json');
+  if (req.method === 'POST' && isJson) return handleAdGemV3(req, res);
+  return handleAdGemV2(req, res);
+}
+
+// ----- v3 : POST JSON signé (recommandé) -----
+function handleAdGemV3(req, res) {
+  const body = (req.body && typeof req.body === 'object') ? req.body : {};
+  const data = (body.data && typeof body.data === 'object') ? body.data : {};
+  const key = config.adgemPostbackKey;
+
+  // Signature = HMAC-SHA256 du corps brut (raw body) signé avec la Postback Key
+  const receivedSig = String(req.headers['signature'] || '');
+  if (key && receivedSig) {
+    const raw = req.rawBody ? req.rawBody.toString('utf8') : JSON.stringify(body);
+    const expected = crypto.createHmac('sha256', key).update(raw).digest('hex');
+    if (expected.toLowerCase() !== receivedSig.toLowerCase()) {
+      return res.status(401).send('invalid signature');
+    }
+  }
+
+  const playerId = String(data.player_id || body.player_id || data.user_id || body.user_id || '');
+  // anti-doublon : conversion_id identifie la conversion (les retries ont un request_id neuf)
+  const convId = String(data.conversion_id || body.conversion_id || body.request_id || data.request_id || '');
+  let amount = parseFloat(data.amount != null ? data.amount : body.amount);
+  const payout = parseFloat(data.payout != null ? data.payout : body.payout);
+  if (isNaN(amount) || amount < 0) amount = isNaN(payout) ? 0 : payout; // fallback sur le payout
+  const divisor = config.adgemAmountDivisor || 1;
+
+  if (!playerId) return res.status(200).send('OK'); // pas de user → ignoré, pas de retry
+  const user = store.findUserById(playerId);
+  if (!user || !user.active) return res.status(200).send('OK');
+
+  const realAmount = Math.round(amount / divisor * 100) / 100;
+  if (realAmount <= 0) return res.status(200).send('OK');
+
+  const tag = 'adgem:' + (convId || (playerId + ':' + amount));
+  if (store.allTx().some(x => x.note === tag)) return res.status(200).send('OK'); // déjà crédité
+
+  store.credit(user, realAmount, 'offer', tag);
+  store.afterReferralActivity(user, realAmount);
+  res.status(200).send('OK');
+}
+
+// ----- v2 : GET (ou POST urlencodé) avec verifier HMAC de l'URL -----
+function handleAdGemV2(req, res) {
   const requestId = getParam(req, 'request_id');
   const verifier = getParam(req, 'verifier');
   const playerId = getParam(req, 'player_id') || getParam(req, 'playerid') || getParam(req, 'user_id');
